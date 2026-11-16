@@ -76,13 +76,21 @@ STAGES: list[Stage] = [
         ai="shownotes", ai_input=("fine_cut", "final_transcript"), ai_target="content",
     ),
     Stage(
-        key="distribution", name="全平台分发", role="operator",
-        description="AI 根据 Show notes 生成各平台文案。审核修改后去各平台发布，再把链接填回来。",
+        key="copy_review", name="文案审核", role="copywriter",
+        description="AI 根据 Show notes 生成各平台文案，文案伙伴审核内容：事实、表述、风险。确认后交给运营发布。",
         fields=[
-            Field("content", "发布文案", "markdown", True),
-            Field("published_links", "各平台发布链接", "textarea", True, "每行一个：平台 链接"),
+            Field("content", "各平台文案", "markdown", True),
+            Field("notes", "给运营的说明", "textarea", False, "如：某条需要配图、某平台先发"),
         ],
         ai="distribution", ai_input=("shownotes", "content"), ai_target="content",
+    ),
+    Stage(
+        key="distribution", name="编辑发布", role="operator",
+        description="按审核后的文案在各平台编辑排版并发布，再把链接填回来。音频平台（小宇宙、Apple Podcasts 等）通过 RSS 同步，只需核对是否已更新。",
+        fields=[
+            Field("final_copy", "最终发布文案", "markdown", False, "排版时的改动可以记在这里；内容改动请退回文案审核"),
+            Field("published_links", "各平台发布链接", "textarea", True, "每行一个：平台 链接"),
+        ],
     ),
 ]
 

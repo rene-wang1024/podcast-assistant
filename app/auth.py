@@ -9,6 +9,7 @@ ROLES = {
     "recorder": "录制团队",
     "producer": "制作人",
     "editor": "精剪伙伴",
+    "copywriter": "文案伙伴",
     "operator": "运营伙伴",
 }
 

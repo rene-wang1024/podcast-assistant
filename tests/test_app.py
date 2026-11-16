@@ -32,7 +32,7 @@ def test_full_flow(client):
     assert c.get("/", follow_redirects=False).headers["location"] == "/setup"
     c.post("/setup", data={"username": "producer", "password": "password1", "display_name": "制作人", "mobile": "100"})
     # 添加三个伙伴
-    for u, role, m in [("rec", "recorder", "101"), ("ed", "editor", "102"), ("op", "operator", "103")]:
+    for u, role, m in [("rec", "recorder", "101"), ("ed", "editor", "102"), ("op", "operator", "103"), ("cw", "copywriter", "104")]:
         c.post("/users", data={"action": "create", "username": u, "password": "password1", "role": role, "mobile": m})
     assert "rec" in c.get("/users").text
     c.post("/settings", data={"section": "notify", "wecom_webhook": "https://example.invalid/hook", "base_url": "https://studio.test"})
@@ -40,7 +40,8 @@ def test_full_flow(client):
     # 录制团队新建一期
     login(c, "rec", "password1")
     r = c.post("/episodes/new", data={"code": "EP01", "title": "测试一期", "assignee_upload": "2", "assignee_rough_cut": "1",
-                                      "assignee_fine_cut": "3", "assignee_shownotes": "1", "assignee_distribution": "4"},
+                                      "assignee_fine_cut": "3", "assignee_shownotes": "1", "assignee_copy_review": "5",
+                                      "assignee_distribution": "4"},
                follow_redirects=False)
     url = r.headers["location"]
     eid = int(url.rsplit("/", 1)[1])
@@ -72,10 +73,16 @@ def test_full_flow(client):
     r = c.post(f"/episodes/{eid}/stages/shownotes", data={"action": "ai"}, follow_redirects=True)
     assert "AI 初稿已生成" in r.text and "独立审查" in r.text
     c.post(f"/episodes/{eid}/stages/shownotes", data={"action": "complete", "content": "# 标题\n- 测试"})
-    # 分发
+    # 文案审核：AI 先做，文案伙伴审核
+    login(c, "cw", "password1")
+    r = c.post(f"/episodes/{eid}/stages/copy_review", data={"action": "ai"}, follow_redirects=True)
+    assert "AI 初稿已生成" in r.text
+    c.post(f"/episodes/{eid}/stages/copy_review", data={"action": "complete", "content": "审核后的文案"})
+    assert c.sent[-1][1] == ["103"]  # 通知运营
+    # 编辑发布：运营
     login(c, "op", "password1")
-    c.post(f"/episodes/{eid}/stages/distribution", data={"action": "ai"})
-    c.post(f"/episodes/{eid}/stages/distribution", data={"action": "complete", "content": "文案", "published_links": "小宇宙 https://x"})
+    assert "审核后的文案" in c.get(f"/episodes/{eid}").text
+    c.post(f"/episodes/{eid}/stages/distribution", data={"action": "complete", "published_links": "小宇宙 https://x"})
     page = c.get(f"/episodes/{eid}").text
     assert "全部完成 ·" in page
 

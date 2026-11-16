@@ -36,7 +36,8 @@ flowchart LR
     A[Recording upload<br/>Recording team] --> B[Rough cut<br/>Producer]
     B --> C[Fine cut<br/>Editor]
     C --> D[Show notes + cover<br/>Producer]
-    D --> E[Distribution<br/>Ops]
+    D --> G[Copy review<br/>Copy editor]
+    G --> E[Edit & publish<br/>Ops]
     E -.after release.-> F[Retrospective<br/>AI compares its draft with the final cut<br/>and updates the editing rules]
     F -.rule library.-> B
 ```
@@ -47,7 +48,8 @@ flowchart LR
 | Rough cut | Producer | Reviewed cut list, rough-cut link | Transcript + cut list (V2) | SenseVoice + OpenAI Codex |
 | Fine cut | Editor | Final-cut link, final transcript | Fine-cut suggestions (V3) | Claude |
 | Show notes + cover | Producer | Approved show notes and cover | Show notes ✅, cover (V3) | Claude, GPT Image |
-| Distribution | Ops | Approved copy, links to published posts | Per-platform copy ✅ | GPT |
+| Copy review | Copy editor | Per-platform copy, checked for facts, wording and risk | Per-platform copy ✅ | GPT |
+| Edit & publish | Ops | Posts edited and published on each platform, links pasted back | — (audio platforms sync via RSS) | — |
 | Retrospective | Producer | Approved rule changes | Draft vs. final comparison (V3) | Claude |
 
 **Downstream reviews upstream.** Before a step starts, its model first checks the previous step's output against that step's delivery standard. Adjacent steps use models from different vendors by default, so each one cross-checks the other.
