@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>播客协作工作台 · 知识类播客从录制到发布的一条流水线</title>
-<meta name="description" content="开源的播客团队协作工作台：录制、粗剪、精剪、Show notes、分发按步骤流转，每一步 AI 先做、人审核，不同步骤调用不同模型。">
+<meta name="description" content="播客团队协作工作台：录制、粗剪、精剪、Show notes、文案审核、发布按步骤流转，AI 先出初稿，负责的伙伴审核。">
 <style>
   :root { --bg:#f7f5f0; --ink:#1c1f24; --muted:#676c74; --line:#e5e0d6; --brand:#1d4ed8; --accent:#ea7a1e; --card:#fff; }
   * { box-sizing:border-box; }
@@ -69,27 +69,27 @@
   <nav>
     <a class="logo" href="#"><i></i>播客协作工作台</a>
     <span class="sp"></span>
-    <a class="l" href="#flow">流程</a><a class="l" href="#models">模型分配</a><a class="l" href="#rules">剪辑规则</a><a class="l" href="#start">开始使用</a>
+    <a class="l" href="#flow">流程</a><a class="l" href="#models">模型分配</a><a class="l" href="#roadmap">路线图</a>
     <a class="btn" href="https://github.com/rene-wang1024/podcast-assistant">GitHub</a>
   </nav>
 
   <header class="hero">
-    <span class="tag">开源 · 为知识类播客团队而做</span>
+    <span class="tag">为知识类播客团队而做</span>
     <h1>一期播客，从录制到发布<br>在<em>一条流水线</em>上走完</h1>
-    <p>每一步 AI 先做初稿，负责的伙伴审核后自动交给下一步。不用再在网盘和群聊之间来回问“传好了吗”。</p>
-    <div class="cta"><a class="btn p" href="#start">免费部署</a><a class="btn" href="https://github.com/rene-wang1024/podcast-assistant">查看源码</a></div>
+    <p>每一步有固定的负责人，完成后自动交给下一步；Show notes 和各平台文案由 AI 先出初稿。不用再在网盘和群聊之间来回问“传好了吗”。</p>
+    <div class="cta"><a class="btn p" href="#collab">看看怎么用</a><a class="btn" href="#roadmap">路线图</a></div>
     <div class="flow" id="flow">
       <div><b>录制上传</b><small>录制团队</small></div>
-      <div><span>AI</span><b>粗剪</b><small>制作人审核</small></div>
-      <div><span>AI</span><b>精剪</b><small>精剪伙伴审核</small></div>
-      <div><span>AI</span><b>Show notes + 封面</b><small>制作人审核</small></div>
+      <div><b>粗剪</b><small>制作人</small></div>
+      <div><b>精剪</b><small>精剪伙伴</small></div>
+      <div><span>AI</span><b>Show notes</b><small>制作人审核</small></div>
       <div><span>AI</span><b>文案审核</b><small>文案伙伴审核</small></div>
       <div><b>编辑发布</b><small>运营伙伴</small></div>
     </div>
   </header>
 </div>
 
-<section class="alt"><div class="wrap">
+<section class="alt" id="collab"><div class="wrap">
   <div class="sh"><span class="n">01</span><div><h2>团队协作，不再靠网盘接力</h2><p>大文件继续放网盘，进度、交付物和交接都在工作台里。</p></div></div>
   <div class="two">
     <div>
@@ -100,21 +100,18 @@
       <li><b>按步骤自动流转</b>：每一步有负责人、必交项和状态</li>
       <li><b>企业微信群机器人</b>：轮到谁就 @ 谁，退回时附上原因</li>
       <li><b>大文件不搬家</b>：视频放百度网盘，工作台只存链接和压缩音频</li>
-      <li><b>香港 / 新加坡部署</b>：国内外伙伴都能打开，不需要备案</li>
+      <li><b>管理员可退回</b>：发现问题可以退回到已完成的步骤，并写明原因</li>
       <li><b>账号和角色</b>：录制团队、制作人、精剪伙伴、文案伙伴、运营伙伴</li>
     </ul>
   </div>
 </div></section>
 
 <section><div class="wrap">
-  <div class="sh"><span class="n">02</span><div><h2>AI 先做，人审核</h2><p>AI 负责出初稿，人只做判断。</p></div></div>
+  <div class="sh"><span class="n">02</span><div><h2>AI 先做，人审核</h2><p>Show notes 和各平台文案由 AI 出初稿，负责的伙伴修改后确认。</p></div></div>
   <div class="cards">
-    <div class="card"><div class="ic">✂️</div><h3>AI 粗剪方案</h3><p>根据逐字转写给出剪点方案，标注每一处删除的原文、上下文和理由。审核后一键生成剪映草稿。</p></div>
     <div class="card"><div class="ic">📝</div><h3>Show notes</h3><p>根据定稿文字稿生成标题候选、简介、时间轴、专业概念、金句和关键词。</p></div>
-    <div class="card"><div class="ic">🎨</div><h3>单集封面</h3><p>按节目档案里的品牌风格出图，禁用元素一律不出现。</p></div>
-    <div class="card"><div class="ic">📣</div><h3>全平台文案</h3><p>为小宇宙、小红书、B 站等平台分别写好标题、正文、标签和发布检查项。</p></div>
+    <div class="card"><div class="ic">📣</div><h3>全平台文案</h3><p>为小宇宙、小红书、抖音、B 站、公众号等平台分别写好标题、正文、标签和发布检查项，文案伙伴审核后交给运营发布。</p></div>
     <div class="card"><div class="ic">🔍</div><h3>独立审查</h3><p>每份 AI 初稿都由另一家厂商的模型按交付标准逐条检查，不让模型自己审自己。</p></div>
-    <div class="card"><div class="ic">📈</div><h3>定稿复盘</h3><p>对比 AI 稿和人工定稿，提出剪辑规则修改建议，制作人确认后写进规则库。</p></div>
   </div>
 </div></section>
 
@@ -122,33 +119,14 @@
   <div class="sh"><span class="n">03</span><div><h2>每一步，用最合适的模型</h2><p>在设置页随时更换模型，不用改代码。</p></div></div>
   <table>
     <tr><th>步骤</th><th>执行模型</th><th>审查模型</th><th>为什么</th></tr>
-    <tr><td>转写</td><td><span class="m">SenseVoice</span></td><td>—</td><td>中文准，带逐字时间戳，服务器上免费运行</td></tr>
-    <tr><td>粗剪</td><td><span class="m">OpenAI Codex</span></td><td><span class="m">Claude</span></td><td>结构化输出几百个剪点</td></tr>
-    <tr><td>精剪建议</td><td><span class="m">Claude</span></td><td><span class="m">OpenAI Codex</span></td><td>细判断取舍；和粗剪换厂商，互相检查</td></tr>
     <tr><td>Show notes</td><td><span class="m">Claude</span></td><td><span class="m">GPT</span></td><td>中文长文本的概括和归纳</td></tr>
-    <tr><td>封面</td><td><span class="m">GPT 生图</span></td><td><span class="m">Claude</span></td><td>图像生成，审查模型直接看图</td></tr>
     <tr><td>分发文案</td><td><span class="m">GPT</span></td><td><span class="m">Claude</span></td><td>和 Show notes 换厂商，交叉核对</td></tr>
   </table>
-  <p style="color:var(--muted);font-size:15px;margin-top:14px">每一步开工前，下游的模型先按上游的交付标准检查一遍上游产出，发现问题就退回。</p>
-</div></section>
-
-<section id="rules"><div class="wrap">
-  <div class="sh"><span class="n">04</span><div><h2>剪辑规则，从人工定稿里学</h2><p>规则来自多期节目「AI 第一稿 vs 人工定稿」的逐条对比，适用于所有知识类播客。</p></div></div>
-  <div class="cards">
-    <div class="card"><h3>观点和案例必须保留</h3><p>表达可以精简，但不能因为说得乱就整段删。取舍以句子为单位。</p></div>
-    <div class="card"><h3>同一个点只讲一遍</h3><p>第二种说法、第二个类比、讲完之后的总结回指都删。</p></div>
-    <div class="card"><h3>推测和假设要删</h3><p>即使带观点也删；事实、定性和结论保留。</p></div>
-  </div>
-  <div class="stat">
-    <div><b>60–70%</b><small>粗剪占原始时长</small></div>
-    <div><b>55–65%</b><small>精剪定稿</small></div>
-    <div><b>≈50%</b><small>音频平台版</small></div>
-    <div><b>6 秒/分钟</b><small>逐字精简的覆盖率</small></div>
-  </div>
+  <p style="color:var(--muted);font-size:15px;margin-top:14px">执行模型和审查模型来自不同厂商，审查结果逐条显示在初稿旁边，供负责人参考。</p>
 </div></section>
 
 <section class="alt"><div class="wrap">
-  <div class="sh"><span class="n">05</span><div><h2>适用于任何知识类播客</h2><p>在节目档案里填写你的领域，AI 就按你的标准工作。</p></div></div>
+  <div class="sh"><span class="n">04</span><div><h2>适用于任何知识类播客</h2><p>在节目档案里填写你的领域，AI 就按你的标准工作。</p></div></div>
   <div class="cards">
     <div class="card"><div class="ic">⚖️</div><h3>法律对谈</h3><p>法条和数字必须和录音一致；涉及具体案件用“据报道”，不对未判决的案件下结论。</p></div>
     <div class="card"><div class="ic">🏛️</div><h3>历史讲述</h3><p>年份和人名必须准确；区分史料记载和讲述者的推测。</p></div>
@@ -156,31 +134,15 @@
   </div>
 </div></section>
 
-<section id="start"><div class="wrap">
-  <div class="sh"><span class="n">06</span><div><h2>开始使用</h2><p>先在自己电脑上试用，满意后再部署到服务器。</p></div></div>
-  <div class="two" style="align-items:start">
-    <div><h3>本地试用（不调用模型，不花钱）</h3>
-<pre>git clone https://github.com/rene-wang1024/podcast-assistant.git
-cd podcast-assistant
-pip install -r requirements.txt
-PIPELINE_PROVIDER_OVERRIDE=mock \
-  uvicorn app.main:app --port 8000</pre></div>
-    <div><h3>部署到香港服务器</h3>
-<pre>curl -fsSL https://get.docker.com | sh
-git clone https://github.com/rene-wang1024/podcast-assistant.git
-cd podcast-assistant && cp .env.example .env
-nano .env        # 填 SECRET_KEY 和 API Key
-docker compose up -d --build</pre>
-      <p><a href="https://github.com/rene-wang1024/podcast-assistant/blob/main/docs/deploy.md">完整部署指南 →</a></p></div>
-  </div>
-  <h3 style="margin-top:36px">路线图</h3>
+<section id="roadmap"><div class="wrap">
+  <div class="sh"><span class="n">05</span><div><h2>路线图</h2><p>先跑通团队协作，再逐步把 AI 接进剪辑。</p></div></div>
   <div class="road">
-    <div class="card done"><b>V1 · 已完成</b><h3>跑通协作</h3><p>账号和角色、单期流转、网盘链接、音频上传、企业微信通知、AI 生成 Show notes 和分发文案。</p></div>
-    <div class="card"><b>V2 · 下一步</b><h3>AI 粗剪</h3><p>服务器端转写、AI 剪点方案、网页审核剪点、本地小工具一键生成剪映草稿。</p></div>
-    <div class="card"><b>V3</b><h3>精剪、封面、复盘</h3><p>AI 精剪建议、AI 封面、定稿复盘和规则库。</p></div>
+    <div class="card done"><b>V1 · 已完成</b><h3>跑通协作</h3><p>账号和角色、单期流转、网盘链接、音频上传、企业微信通知、AI 生成 Show notes 和分发文案，附独立审查。</p></div>
+    <div class="card"><b>V2 · 下一步</b><h3>AI 粗剪</h3><p>转写和 AI 剪点方案，网页上审核剪点，审核后生成剪映草稿。</p></div>
+    <div class="card"><b>V3</b><h3>精剪、封面、复盘</h3><p>AI 精剪建议、AI 封面，以及对比 AI 稿和人工定稿的复盘。</p></div>
   </div>
 </div></section>
 
-<footer><div class="wrap">播客协作工作台 · MIT License · 最初为一档法律对谈播客打造，现适用于所有知识类播客</div></footer>
+<footer><div class="wrap">播客协作工作台 · 最初为一档法律对谈播客打造，适用于所有知识类播客</div></footer>
 </body>
 </html>
