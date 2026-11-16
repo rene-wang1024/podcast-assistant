@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="head"><h1>设置</h1></div>
+
+<form method="post" class="card">
+  <input type="hidden" name="section" value="show">
+  <h2>节目档案</h2>
+  <p class="muted small">AI 生成 Show notes 和分发文案时会用到。适用于任何知识类播客，换节目只改这里。</p>
+  <div class="grid">
+    <div><label>节目名</label><input type="text" name="name" value="{{ show.name or '' }}"></div>
+    <div><label>领域</label><input type="text" name="domain" value="{{ show.domain or '' }}" placeholder="法律 / 历史 / 科学 / 商业…"></div>
+    <div><label>形式</label><input type="text" name="format" value="{{ show.format or '' }}" placeholder="单人讲述 / 对谈 / 访谈"></div>
+  </div>
+  <label>一句话定位</label><input type="text" name="tagline" value="{{ show.tagline or '' }}">
+  <label>领域准确性要求<span class="help">每行一条</span></label><textarea name="accuracy_rules">{{ show_yaml_lists.accuracy_rules }}</textarea>
+  <label>免责声明</label><input type="text" name="disclaimer" value="{{ show.disclaimer or '' }}">
+  <label>分发平台<span class="help">每行一个</span></label><textarea name="platforms" style="min-height:80px">{{ show_yaml_lists.platforms }}</textarea>
+  <h3 style="margin-top:18px">封面风格（V3 生成封面时用）</h3>
+  <div class="grid">
+    <div><label>风格</label><input type="text" name="brand_style" value="{{ brand.style or '' }}"></div>
+    <div><label>标题字体</label><input type="text" name="brand_title_font" value="{{ brand.title_font or '' }}"></div>
+    <div><label>固定元素</label><input type="text" name="brand_fixed_elements" value="{{ brand.fixed_elements or '' }}"></div>
+    <div><label>禁用元素</label><input type="text" name="brand_avoid" value="{{ brand.avoid or '' }}"></div>
+  </div>
+  <div class="btns"><button class="btn primary">保存节目档案</button></div>
+</form>
+
+<div class="card">
+  <h2>企业微信通知</h2>
+  <form method="post">
+    <input type="hidden" name="section" value="notify">
+    <label>群机器人 Webhook<span class="help">企业微信群 → 群设置 → 群机器人 → 添加 → 复制 Webhook 地址</span></label>
+    <input type="url" name="wecom_webhook" value="{{ webhook }}" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...">
+    <label>工作台网址<span class="help">通知里的链接用，如 https://studio.example.com</span></label>
+    <input type="url" name="base_url" value="{{ base_url }}">
+    <div class="btns"><button class="btn primary">保存</button></div>
+  </form>
+  <form method="post" style="margin-top:8px"><input type="hidden" name="section" value="notify_test"><button class="btn small">发一条测试消息</button></form>
+</div>
+
+<form method="post" class="card">
+  <input type="hidden" name="section" value="models">
+  <h2>模型分配</h2>
+  <p class="muted small">每一步由「执行模型」先做，再由「审查模型」按交付标准独立审查。建议两者用不同厂商。
+    API Key 写在服务器的 .env 里：OpenAI {{ '✓ 已配置' if keys.OPENAI_API_KEY else '✗ 未配置' }}，Anthropic {{ '✓ 已配置' if keys.ANTHROPIC_API_KEY else '✗ 未配置' }}。</p>
+  <table>
+    <tr><th>步骤</th><th>执行模型</th><th>审查模型</th></tr>
+    {% for wf in all_workflows %}<tr>
+      <td>{{ wf.name }}{% if wf not in workflows %} <span class="badge">V2/V3</span>{% endif %}</td>
+      {% for role in ['executor', 'reviewer'] %}{% set ref = wf[role] if wf is mapping else (wf.executor if role == 'executor' else wf.reviewer) %}
+      <td><select name="{{ wf.id }}_{{ role }}_provider" style="width:120px">{% for p in providers %}<option {{ 'selected' if ref.provider == p }}>{{ p }}</option>{% endfor %}</select>
+        <input type="text" name="{{ wf.id }}_{{ role }}_model" value="{{ ref.model }}" style="width:180px"></td>
+      {% endfor %}
+    </tr>{% endfor %}
+  </table>
+  {% if env_override %}<p class="flash error small">当前设置了 PIPELINE_PROVIDER_OVERRIDE={{ env_override }}：所有步骤临时走 {{ env_override }}，下面显示的是去掉它之后会用的模型。</p>{% endif %}
+  <p class="muted small">codex 提供方调用本机的 Codex 命令行，只适合在你自己电脑上跑；服务器上请选 openai 并填 Codex 系列的型号名。</p>
+  <div class="btns"><button class="btn primary">保存模型分配</button></div>
+</form>
+{% endblock %}

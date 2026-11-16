@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% block main_class %}narrow{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>欢迎使用播客工作台</h1>
+  <p class="muted">先创建管理员账号（制作人）。之后在「成员」里给伙伴开账号。</p>
+  <form method="post">
+    <label>用户名<span class="req">*</span></label><input type="text" name="username" required autofocus>
+    <label>显示名</label><input type="text" name="display_name" placeholder="伙伴们看到的名字">
+    <label>密码<span class="req">*</span><span class="help">至少 8 位</span></label><input type="password" name="password" required minlength="8">
+    <label>手机号<span class="help">企业微信群里 @ 你用</span></label><input type="tel" name="mobile">
+    <div class="btns"><button class="btn primary">创建并进入</button></div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ ep.code }} {{ ep.title }} · 播客工作台{% endblock %}
+{% block content %}
+<div class="head">
+  <div><div class="muted">{{ ep.code }}</div><h1>{{ ep.title }}</h1></div>
+  {% if ep.finished_at %}<span class="badge done">全部完成 · {{ ep.finished_at[:10] }}</span>{% endif %}
+</div>
+
+<div class="timeline">
+{% for s in stages %}
+  <a href="#stage-{{ s.def.key }}" class="{{ s.row.status }}">
+    <div class="n">{{ loop.index }} · {{ STATUS_LABEL[s.row.status] }}</div>
+    <div class="t">{{ s.def.name }}</div>
+    <div class="n">{{ s.assignee.display_name if s.assignee else '未指定' }}</div>
+  </a>
+{% endfor %}
+</div>
+
+{% for s in stages %}{% set st = s.def %}{% set r = s.row %}
+<section class="card stage {{ r.status }}" id="stage-{{ st.key }}">
+  <div class="top">
+    <h2 style="margin:0">{{ loop.index }}. {{ st.name }}</h2>
+    <span class="badge {{ r.status }}">{{ STATUS_LABEL[r.status] }}</span>
+    <span class="grow"></span>
+    {% if s.models %}<span class="badge model" title="执行模型">AI：{{ s.models[0] }}</span>
+      <span class="badge model" title="审查模型">审查：{{ s.models[1] }}</span>{% endif %}
+    <span class="muted small">负责人：{{ s.assignee.display_name if s.assignee else '未指定' }}</span>
+  </div>
+  <p class="muted small" style="margin:6px 0 0">{{ st.description }}</p>
+
+  {% if s.editable %}
+    {# ---- 可编辑 ---- #}
+    {% if st.ai %}
+    <div class="ai-box">
+      <form method="post" action="/episodes/{{ ep.id }}/stages/{{ st.key }}" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='AI 生成中，约 1 分钟…'">
+        <input type="hidden" name="action" value="ai">
+        <strong>AI 先做</strong>
+        <span class="muted small">根据「{{ STAGES | selectattr('key','equalto', st.ai_input[0]) | map(attribute='name') | first }}」生成初稿{% if s.data.get(st.ai_target) %}，会覆盖下面的当前内容{% endif %}。</span>
+        <button class="btn primary small" style="margin-left:8px">{{ '重新生成' if s.meta else '生成 AI 初稿' }}</button>
+      </form>
+      {% if s.review %}
+      <details style="margin-top:8px" {{ 'open' if s.review.verdict != 'pass' }}>
+        <summary>独立审查：<span class="badge {{ s.review.verdict }}">{{ '通过' if s.review.verdict == 'pass' else '有问题' }}</span>
+          {{ s.review.summary }} <span class="small">（{{ s.review.reviewer }} · {{ s.meta.time[:16].replace('T',' ') }}）</span></summary>
+        <ul class="review small">{% for it in s.review['items'] %}
+          <li class="{{ '' if it.ok else 'no' }}">{{ '✓' if it.ok else '✗' }} {{ it.standard }}{% if it.note %} —— <span class="muted">{{ it.note }}</span>{% endif %}</li>
+        {% endfor %}</ul>
+      </details>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/episodes/{{ ep.id }}/stages/{{ st.key }}" enctype="multipart/form-data">
+      {% for f in st.fields %}
+        <label>{{ f.label }}{% if f.required %}<span class="req">*</span>{% endif %}{% if f.help %}<span class="help">{{ f.help }}</span>{% endif %}</label>
+        {% if f.type == 'textarea' %}<textarea name="{{ f.name }}">{{ s.data.get(f.name, '') }}</textarea>
+        {% elif f.type == 'markdown' %}<textarea class="big" name="{{ f.name }}" placeholder="{{ '可以先点上面的「生成 AI 初稿」' if st.ai }}">{{ s.data.get(f.name, '') }}</textarea>
+        {% elif f.type == 'file' %}
+          {% for fl in files.get((st.key, f.name), []) %}<div class="small"><a href="/files/{{ fl.id }}">📎 {{ fl.filename }}</a> <span class="muted">{{ (fl.size / 1048576) | round(1) }} MB</span></div>{% endfor %}
+          <input type="file" name="{{ f.name }}" {% if f.accept %}accept="{{ f.accept }}"{% endif %}>
+          <div class="help" style="margin:4px 0 0">单个文件不超过 {{ max_mb }} MB；视频请放网盘</div>
+        {% else %}<input type="{{ 'url' if f.type == 'url' else 'text' }}" name="{{ f.name }}" value="{{ s.data.get(f.name, '') }}">{% endif %}
+      {% endfor %}
+      <div class="btns">
+        <button class="btn" name="action" value="save">保存</button>
+        <button class="btn accent" name="action" value="complete">完成，交给下一步 →</button>
+      </div>
+    </form>
+
+  {% elif r.status != 'waiting' %}
+    {# ---- 只读 ---- #}
+    <dl class="kv">
+    {% for f in st.fields %}
+      <dt>{{ f.label }}</dt>
+      <dd>{% if f.type == 'file' %}{% for fl in files.get((st.key, f.name), []) %}<a href="/files/{{ fl.id }}">📎 {{ fl.filename }}</a><br>{% else %}<span class="muted">—</span>{% endfor %}
+        {% elif f.type == 'url' and s.data.get(f.name) %}<a href="{{ s.data[f.name] }}" target="_blank" rel="noopener">{{ s.data[f.name] }}</a>
+        {% elif f.type == 'markdown' and s.data.get(f.name) %}<pre class="md">{{ s.data[f.name] }}</pre>
+        {% else %}<span class="pre">{{ s.data.get(f.name) or '—' }}</span>{% endif %}</dd>
+    {% endfor %}
+    </dl>
+    {% if r.status == 'done' %}<p class="muted small">完成于 {{ r.completed_at[:16].replace('T',' ') }}</p>{% endif %}
+  {% endif %}
+
+  {% if user.is_admin %}
+  <div class="admin-tools small">
+    <form method="post" action="/episodes/{{ ep.id }}/stages/{{ st.key }}">
+      <input type="hidden" name="action" value="assign">
+      <span class="muted">负责人</span>
+      <select name="assignee_id"><option value="">未指定</option>
+        {% for role, people in by_role.items() %}{% for p in people %}<option value="{{ p.id }}" {{ 'selected' if r.assignee_id == p.id }}>{{ p.display_name }}（{{ ROLES.get(role, role) }}）</option>{% endfor %}{% endfor %}
+      </select><button class="btn small">改</button>
+    </form>
+    {% if r.status == 'done' %}
+    <form method="post" action="/episodes/{{ ep.id }}/stages/{{ st.key }}" onsubmit="return confirm('退回后，这一步之后的步骤都会回到未开始。确定？')">
+      <input type="hidden" name="action" value="reopen">
+      <input type="text" name="reason" placeholder="退回原因">
+      <button class="btn small">退回到这一步</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endfor %}
+
+<section class="card">
+  <h2>动态</h2>
+  <ul class="events">{% for e in events %}
+    <li><span class="muted">{{ e.created_at[5:16].replace('T',' ') }}</span> · {{ e.display_name or '系统' }} · <strong>{{ e.action }}</strong> {{ e.detail }}</li>
+  {% else %}<li class="muted">暂无</li>{% endfor %}</ul>
+</section>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% from "_progress.html" import progress %}
+{% block content %}
+<div class="head"><h1>全部节目</h1>
+  {% if user.is_admin or user.role == 'recorder' %}<a class="btn primary" href="/episodes/new">＋ 新建一期</a>{% endif %}</div>
+<div class="card">
+{% if episodes %}<table>
+  <tr><th>期号</th><th>标题</th><th>状态</th><th>创建时间</th><th style="width:220px">进度</th></tr>
+  {% for ep in episodes %}<tr>
+    <td>{{ ep.code }}</td><td><a href="/episodes/{{ ep.id }}">{{ ep.title }}</a></td>
+    <td>{% if ep.finished_at %}<span class="badge done">已完成</span>{% else %}<span class="badge todo">{{ STAGE_BY_KEY[ep.current_stage].name }}</span>{% endif %}</td>
+    <td class="muted small">{{ ep.created_at[:10] }}</td><td>{{ progress(ep) }}</td>
+  </tr>{% endfor %}
+</table>{% else %}<div class="empty">还没有节目</div>{% endif %}
+</div>
+{% endblock %}

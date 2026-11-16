@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block main_class %}narrow{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>登录播客工作台</h1>
+  <p class="muted">账号由制作人在后台创建。</p>
+  <form method="post">
+    <label>用户名</label><input type="text" name="username" required autofocus>
+    <label>密码</label><input type="password" name="password" required>
+    <div class="btns"><button class="btn primary">登录</button></div>
+  </form>
+</div>
+{% endblock %}

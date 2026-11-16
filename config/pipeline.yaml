@@ -1,0 +1,62 @@
+# 播客制作流水线：各工作流的模型分配
+# 节目信息在 config/show.yaml。
+# 每个工作流（WF）可以独立指定「执行模型」和「审查模型」。
+#   executor —— 干活的模型
+#   reviewer —— 交付前的独立审查，建议和 executor 用不同厂商，避免自己给自己打分
+# 改模型只改这里，不用动代码。
+#
+# provider 可选：
+#   codex      —— 本地调用 Codex CLI（codex exec），适合要读写本地工程文件的活
+#   openai     —— OpenAI API（文字用 Responses API，图片用 Images API）
+#   anthropic  —— Anthropic API（Claude）
+#   mock       —— 不调用任何模型，只回显 prompt，用于试跑和测试
+#
+# 型号名请换成你账号里可用的最新型号；也可以用环境变量覆盖，
+# 例如 PIPELINE_MODEL_COVER=gpt-image-2。
+
+workflows:
+  - id: rough_cut
+    name: 粗剪
+    spec: workflows/01_rough_cut.md
+    executor: { provider: openai, model: gpt-5.3-codex }  # Codex 系列模型；在本机跑可改成 provider: codex 调 Codex 命令行
+    reviewer: { provider: anthropic, model: claude-opus-5-5 }
+    input: transcript.json          # 逐字转写（含时间戳）
+    output: edl.json                # 剪点方案
+
+  - id: fine_cut
+    name: 精剪
+    spec: workflows/02_fine_cut.md
+    executor: { provider: anthropic, model: claude-opus-5-5 }
+    reviewer: { provider: openai, model: gpt-5.3-codex }
+    input: edl.json
+    output: fine_edl.json
+
+  - id: shownotes
+    name: Show notes
+    spec: workflows/03_shownotes.md
+    executor: { provider: anthropic, model: claude-sonnet-5-5 }
+    reviewer: { provider: openai, model: gpt-5.1 }
+    input: final_transcript.txt     # 定稿后的文字稿
+    output: shownotes.md
+
+  - id: cover
+    name: 封面制作
+    spec: workflows/04_cover.md
+    executor: { provider: openai, model: gpt-image-2, kind: image }
+    reviewer: { provider: anthropic, model: claude-sonnet-5-5 }
+    input: shownotes.md
+    output: cover.png
+
+  - id: distribution
+    name: 全平台分发
+    spec: workflows/05_distribution.md
+    executor: { provider: openai, model: gpt-5.1 }
+    reviewer: { provider: anthropic, model: claude-sonnet-5-5 }
+    input: shownotes.md
+    output: publish_pack.md
+
+# 下游审上游：运行某个 WF 之前，先由它的执行模型按上游的「交付标准」审一遍上游产出。
+# 审查不通过时默认停下，等人确认（可用 --force 跳过）。
+review:
+  downstream_reviews_upstream: true
+  block_on_fail: true

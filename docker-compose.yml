@@ -1,0 +1,26 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data          # 数据库和上传的音频都在这里，记得定期备份
+    expose:
+      - "8000"
+
+  caddy:                      # 自动申请 HTTPS 证书的反向代理
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:

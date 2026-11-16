@@ -1,0 +1,105 @@
+"""SQLite 存储。数据和上传文件都放在 DATA_DIR（默认 ./data）。"""
+from __future__ import annotations
+
+import json
+import os
+import sqlite3
+from datetime import datetime
+from pathlib import Path
+
+DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
+UPLOAD_DIR = DATA_DIR / "uploads"
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    display_name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL,              -- recorder / producer / editor / operator
+    is_admin INTEGER NOT NULL DEFAULT 0,
+    mobile TEXT DEFAULT '',          -- 企业微信群里 @ 人用的手机号
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS episodes (
+    id INTEGER PRIMARY KEY,
+    code TEXT NOT NULL,              -- 期号，如 EP37
+    title TEXT NOT NULL,
+    current_stage TEXT NOT NULL,
+    created_by INTEGER REFERENCES users(id),
+    created_at TEXT NOT NULL,
+    finished_at TEXT
+);
+CREATE TABLE IF NOT EXISTS stages (
+    id INTEGER PRIMARY KEY,
+    episode_id INTEGER NOT NULL REFERENCES episodes(id),
+    key TEXT NOT NULL,
+    status TEXT NOT NULL,            -- waiting / todo / done
+    assignee_id INTEGER REFERENCES users(id),
+    data TEXT NOT NULL DEFAULT '{}', -- 表单字段 JSON
+    ai_output TEXT,
+    ai_review TEXT,                  -- 审查结果 JSON
+    ai_meta TEXT,                    -- 用的模型、时间
+    started_at TEXT,
+    completed_at TEXT,
+    completed_by INTEGER REFERENCES users(id),
+    UNIQUE(episode_id, key)
+);
+CREATE TABLE IF NOT EXISTS files (
+    id INTEGER PRIMARY KEY,
+    episode_id INTEGER NOT NULL REFERENCES episodes(id),
+    stage_key TEXT NOT NULL,
+    field TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    stored_name TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    uploaded_by INTEGER REFERENCES users(id),
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY,
+    episode_id INTEGER REFERENCES episodes(id),
+    user_id INTEGER REFERENCES users(id),
+    action TEXT NOT NULL,
+    detail TEXT DEFAULT '',
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+"""
+
+
+def now() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def connect() -> sqlite3.Connection:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DATA_DIR / "app.db", timeout=30)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+
+
+def init() -> None:
+    with connect() as conn:
+        conn.executescript(SCHEMA)
+
+
+def get_setting(conn, key: str, default=None):
+    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return json.loads(row["value"]) if row else default
+
+
+def set_setting(conn, key: str, value) -> None:
+    conn.execute("INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                 (key, json.dumps(value, ensure_ascii=False)))
+
+
+def log(conn, episode_id: int | None, user_id: int | None, action: str, detail: str = "") -> None:
+    conn.execute("INSERT INTO events(episode_id, user_id, action, detail, created_at) VALUES(?,?,?,?,?)",
+                 (episode_id, user_id, action, detail, now()))

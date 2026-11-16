@@ -1,0 +1,16 @@
+# 案例：历史类单人讲述
+name: 示例历史播客
+tagline: 每期讲透一个历史切片
+domain: 历史
+format: 单人讲述
+language: zh-CN
+accuracy_rules:
+  - 年份、人名、地名必须和录音一致
+  - 区分史料记载和讲述者的推测，推测保留“可能”“一种说法是”
+disclaimer: ""
+brand:
+  style: 复古版画风，米黄底色，墨色线条
+  title_font: 宋体粗体
+  fixed_elements: 左上角留出节目 Logo 位置
+  avoid: 真实人物照片、可能引起争议的旗帜和标志
+platforms: [小宇宙, Apple Podcasts, B站]

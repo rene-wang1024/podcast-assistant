@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="head"><div><h1>新建一期</h1><p class="muted">为每一步指定负责人。创建后第一步的负责人会收到通知。</p></div></div>
+<form method="post" class="card">
+  <div class="grid" style="grid-template-columns:160px 1fr">
+    <div><label>期号<span class="req">*</span></label><input type="text" name="code" placeholder="EP37" required></div>
+    <div><label>标题<span class="req">*</span></label><input type="text" name="title" placeholder="可以先写暂定标题" required></div>
+  </div>
+  <h2 style="margin-top:24px">各步骤负责人</h2>
+  <div class="grid">
+  {% for s in STAGES %}
+    <div><label>{{ loop.index }}. {{ s.name }} <span class="help">默认：{{ ROLES[s.role] }}</span></label>
+      <select name="assignee_{{ s.key }}">
+        <option value="">（暂不指定）</option>
+        {% for role, people in by_role.items() %}{% if people %}<optgroup label="{{ ROLES.get(role, role) }}">
+          {% for p in people %}<option value="{{ p.id }}" {{ 'selected' if role == s.role and loop.first }}>{{ p.display_name }}</option>{% endfor %}
+        </optgroup>{% endif %}{% endfor %}
+      </select></div>
+  {% endfor %}
+  </div>
+  <div class="btns"><button class="btn primary">创建</button><a class="btn" href="/">取消</a></div>
+</form>
+{% endblock %}

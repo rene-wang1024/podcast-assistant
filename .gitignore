@@ -1,0 +1,12 @@
+# 每期素材和产出只放本地，不进仓库
+episodes/
+*.wav
+*.mp3
+*.mp4
+*.mov
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+data/

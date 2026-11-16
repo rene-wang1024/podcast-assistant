@@ -1,0 +1,17 @@
+# 案例：科普类访谈
+name: 示例科普播客
+tagline: 请一线研究者用大白话讲他们的研究
+domain: 科学
+format: 访谈
+language: zh-CN
+accuracy_rules:
+  - 研究结论保留限定条件（样本、条件、相关不等于因果）
+  - 数字和单位必须和录音一致；嘉宾说错并当场更正的，以更正为准
+  - 不把单篇研究说成定论
+disclaimer: 节目内容为嘉宾个人观点，不构成医疗或投资建议。
+brand:
+  style: 简洁几何，深色底，荧光强调色
+  title_font: 无衬线粗体
+  fixed_elements: 底部居中留出节目 Logo 位置
+  avoid: 真实人物肖像、药品和医疗器械品牌
+platforms: [小宇宙, Apple Podcasts, 小红书, B站]

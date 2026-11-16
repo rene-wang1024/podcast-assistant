@@ -1,0 +1,9 @@
+{% macro progress(ep, conn_stages=None) -%}
+{% set ns = namespace(passed=true) %}
+<div class="steps">{% for s in STAGES %}
+  {% if ep.current_stage == 'done' %}<span class="done" title="{{ s.name }}"></span>
+  {% elif s.key == ep.current_stage %}{% set ns.passed = false %}<span class="todo" title="{{ s.name }}"></span>
+  {% elif ns.passed %}<span class="done" title="{{ s.name }}"></span>
+  {% else %}<span title="{{ s.name }}"></span>{% endif %}
+{% endfor %}</div>
+{%- endmacro %}

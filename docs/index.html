@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>播客协作工作台 · 知识类播客从录制到发布的一条流水线</title>
+<meta name="description" content="开源的播客团队协作工作台：录制、粗剪、精剪、Show notes、分发按步骤流转，每一步 AI 先做、人审核，不同步骤调用不同模型。">
+<style>
+  :root { --bg:#f7f5f0; --ink:#1c1f24; --muted:#676c74; --line:#e5e0d6; --brand:#1d4ed8; --accent:#ea7a1e; --card:#fff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",sans-serif; }
+  a { color:var(--brand); text-decoration:none; }
+  .wrap { max-width:1080px; margin:0 auto; padding:0 24px; }
+  nav { display:flex; align-items:center; gap:24px; height:64px; }
+  nav .btn { padding:8px 16px; }
+  nav .logo { font-weight:700; display:flex; gap:8px; align-items:center; color:var(--ink); }
+  nav .logo i { width:11px; height:11px; border-radius:50%; background:var(--accent); display:inline-block; }
+  nav .sp { flex:1; }
+  nav a.l { color:var(--muted); font-size:15px; }
+  .btn { display:inline-block; padding:12px 22px; border-radius:12px; font-weight:600; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+  .btn.p { background:var(--brand); border-color:var(--brand); color:#fff; }
+  .hero { padding:72px 0 56px; text-align:center; }
+  .hero .tag { display:inline-block; padding:4px 14px; border-radius:999px; background:#fbe6d3; color:#a8540f; font-size:14px; }
+  .hero h1 { font-size:clamp(32px,5.4vw,54px); line-height:1.2; margin:18px 0 14px; letter-spacing:.5px; }
+  .hero h1 em { font-style:normal; color:var(--brand); }
+  .hero p { color:var(--muted); font-size:18px; max-width:640px; margin:0 auto 28px; }
+  .hero .cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+  .flow { display:flex; gap:10px; margin:52px auto 0; max-width:960px; flex-wrap:wrap; justify-content:center; }
+  .flow div { flex:1; min-width:150px; padding-right:44px !important; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; text-align:left; position:relative; }
+  .flow div b { display:block; }
+  .flow div small { color:var(--muted); }
+  .flow div span { position:absolute; top:12px; right:12px; font-size:11px; padding:1px 8px; border-radius:999px; background:#e8eefc; color:var(--brand); }
+  section { padding:64px 0; }
+  section.alt { background:#fff; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .sh { display:flex; gap:16px; align-items:baseline; margin-bottom:28px; }
+  .sh .n { font-size:15px; color:var(--accent); font-weight:700; }
+  .sh h2 { font-size:30px; margin:0; }
+  .sh p { margin:6px 0 0; color:var(--muted); }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:22px 24px; }
+  section.alt .card { background:var(--bg); }
+  .card .ic { font-size:26px; }
+  .card h3 { margin:8px 0 6px; font-size:18px; }
+  .card p { margin:0; color:var(--muted); font-size:15px; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:40px; align-items:center; }
+  .two > * { min-width:0; }
+  .two ul { padding-left:20px; margin:0; } .two li { margin:8px 0; }
+  .before, .after { border-radius:16px; padding:22px 24px; font-size:15px; }
+  .before { background:#fdecec; color:#7f1d1d; } .after { background:#e7f5ec; color:#14532d; margin-top:14px; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border-radius:16px; overflow:hidden; border:1px solid var(--line); font-size:15px; }
+  th,td { padding:12px 16px; border-bottom:1px solid var(--line); text-align:left; }
+  th { background:#faf8f3; color:var(--muted); font-weight:600; font-size:14px; }
+  code, .m { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13.5px; }
+  .m { background:#e8eefc; color:var(--brand); padding:2px 8px; border-radius:6px; white-space:nowrap; }
+  .stat { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-top:24px; }
+  .stat div { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; }
+  .stat b { font-size:28px; display:block; color:var(--brand); }
+  .stat small { color:var(--muted); }
+  pre { background:#1c1f24; color:#e7e5df; padding:20px 22px; border-radius:16px; overflow:auto; font-size:14px; line-height:1.7; }
+  .road { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .road .card b { color:var(--accent); }
+  .road .done { border-color:#9fd5b1; }
+  footer { padding:40px 0 56px; color:var(--muted); font-size:14px; text-align:center; }
+  @media (max-width:760px) { .two, .road { grid-template-columns:1fr; } .stat { grid-template-columns:1fr 1fr; } nav a.l { display:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a class="logo" href="#"><i></i>播客协作工作台</a>
+    <span class="sp"></span>
+    <a class="l" href="#flow">流程</a><a class="l" href="#models">模型分配</a><a class="l" href="#rules">剪辑规则</a><a class="l" href="#start">开始使用</a>
+    <a class="btn" href="https://github.com/rene-wang1024/podcast-assistant">GitHub</a>
+  </nav>
+
+  <header class="hero">
+    <span class="tag">开源 · 为知识类播客团队而做</span>
+    <h1>一期播客，从录制到发布<br>在<em>一条流水线</em>上走完</h1>
+    <p>每一步 AI 先做初稿，负责的伙伴审核后自动交给下一步。不用再在网盘和群聊之间来回问“传好了吗”。</p>
+    <div class="cta"><a class="btn p" href="#start">免费部署</a><a class="btn" href="https://github.com/rene-wang1024/podcast-assistant">查看源码</a></div>
+    <div class="flow" id="flow">
+      <div><b>录制上传</b><small>录制团队</small></div>
+      <div><span>AI</span><b>粗剪</b><small>制作人审核</small></div>
+      <div><span>AI</span><b>精剪</b><small>精剪伙伴审核</small></div>
+      <div><span>AI</span><b>Show notes + 封面</b><small>制作人审核</small></div>
+      <div><span>AI</span><b>全平台分发</b><small>运营伙伴审核</small></div>
+    </div>
+  </header>
+</div>
+
+<section class="alt"><div class="wrap">
+  <div class="sh"><span class="n">01</span><div><h2>团队协作，不再靠网盘接力</h2><p>大文件继续放网盘，进度、交付物和交接都在工作台里。</p></div></div>
+  <div class="two">
+    <div>
+      <div class="before"><b>以前</b><br>录制传网盘 → 制作人下载粗剪再传 → 精剪下载精剪再传 → 制作人写 Show notes → 运营分发。每一步都要在群里问，没人说得清这一期卡在哪。</div>
+      <div class="after"><b>现在</b><br>上一步点“完成”，下一步的负责人在企业微信群里被 @，打开链接就能看到素材链接、要求和 AI 初稿。</div>
+    </div>
+    <ul>
+      <li><b>按步骤自动流转</b>：每一步有负责人、必交项和状态</li>
+      <li><b>企业微信群机器人</b>：轮到谁就 @ 谁，退回时附上原因</li>
+      <li><b>大文件不搬家</b>：视频放百度网盘，工作台只存链接和压缩音频</li>
+      <li><b>香港 / 新加坡部署</b>：国内外伙伴都能打开，不需要备案</li>
+      <li><b>账号和角色</b>：录制团队、制作人、精剪伙伴、运营伙伴</li>
+    </ul>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="sh"><span class="n">02</span><div><h2>AI 先做，人审核</h2><p>AI 负责出初稿，人只做判断。</p></div></div>
+  <div class="cards">
+    <div class="card"><div class="ic">✂️</div><h3>AI 粗剪方案</h3><p>根据逐字转写给出剪点方案，标注每一处删除的原文、上下文和理由。审核后一键生成剪映草稿。</p></div>
+    <div class="card"><div class="ic">📝</div><h3>Show notes</h3><p>根据定稿文字稿生成标题候选、简介、时间轴、专业概念、金句和关键词。</p></div>
+    <div class="card"><div class="ic">🎨</div><h3>单集封面</h3><p>按节目档案里的品牌风格出图，禁用元素一律不出现。</p></div>
+    <div class="card"><div class="ic">📣</div><h3>全平台文案</h3><p>为小宇宙、小红书、B 站等平台分别写好标题、正文、标签和发布检查项。</p></div>
+    <div class="card"><div class="ic">🔍</div><h3>独立审查</h3><p>每份 AI 初稿都由另一家厂商的模型按交付标准逐条检查，不让模型自己审自己。</p></div>
+    <div class="card"><div class="ic">📈</div><h3>定稿复盘</h3><p>对比 AI 稿和人工定稿，提出剪辑规则修改建议，制作人确认后写进规则库。</p></div>
+  </div>
+</div></section>
+
+<section class="alt" id="models"><div class="wrap">
+  <div class="sh"><span class="n">03</span><div><h2>每一步，用最合适的模型</h2><p>在设置页随时更换模型，不用改代码。</p></div></div>
+  <table>
+    <tr><th>步骤</th><th>执行模型</th><th>审查模型</th><th>为什么</th></tr>
+    <tr><td>转写</td><td><span class="m">SenseVoice</span></td><td>—</td><td>中文准，带逐字时间戳，服务器上免费运行</td></tr>
+    <tr><td>粗剪</td><td><span class="m">OpenAI Codex</span></td><td><span class="m">Claude</span></td><td>结构化输出几百个剪点</td></tr>
+    <tr><td>精剪建议</td><td><span class="m">Claude</span></td><td><span class="m">OpenAI Codex</span></td><td>细判断取舍；和粗剪换厂商，互相检查</td></tr>
+    <tr><td>Show notes</td><td><span class="m">Claude</span></td><td><span class="m">GPT</span></td><td>中文长文本的概括和归纳</td></tr>
+    <tr><td>封面</td><td><span class="m">GPT 生图</span></td><td><span class="m">Claude</span></td><td>图像生成，审查模型直接看图</td></tr>
+    <tr><td>分发文案</td><td><span class="m">GPT</span></td><td><span class="m">Claude</span></td><td>和 Show notes 换厂商，交叉核对</td></tr>
+  </table>
+  <p style="color:var(--muted);font-size:15px;margin-top:14px">每一步开工前，下游的模型先按上游的交付标准检查一遍上游产出，发现问题就退回。</p>
+</div></section>
+
+<section id="rules"><div class="wrap">
+  <div class="sh"><span class="n">04</span><div><h2>剪辑规则，从人工定稿里学</h2><p>规则来自多期节目「AI 第一稿 vs 人工定稿」的逐条对比，适用于所有知识类播客。</p></div></div>
+  <div class="cards">
+    <div class="card"><h3>观点和案例必须保留</h3><p>表达可以精简，但不能因为说得乱就整段删。取舍以句子为单位。</p></div>
+    <div class="card"><h3>同一个点只讲一遍</h3><p>第二种说法、第二个类比、讲完之后的总结回指都删。</p></div>
+    <div class="card"><h3>推测和假设要删</h3><p>即使带观点也删；事实、定性和结论保留。</p></div>
+  </div>
+  <div class="stat">
+    <div><b>60–70%</b><small>粗剪占原始时长</small></div>
+    <div><b>55–65%</b><small>精剪定稿</small></div>
+    <div><b>≈50%</b><small>音频平台版</small></div>
+    <div><b>6 秒/分钟</b><small>逐字精简的覆盖率</small></div>
+  </div>
+</div></section>
+
+<section class="alt"><div class="wrap">
+  <div class="sh"><span class="n">05</span><div><h2>适用于任何知识类播客</h2><p>在节目档案里填写你的领域，AI 就按你的标准工作。</p></div></div>
+  <div class="cards">
+    <div class="card"><div class="ic">⚖️</div><h3>法律对谈</h3><p>法条和数字必须和录音一致；涉及具体案件用“据报道”，不对未判决的案件下结论。</p></div>
+    <div class="card"><div class="ic">🏛️</div><h3>历史讲述</h3><p>年份和人名必须准确；区分史料记载和讲述者的推测。</p></div>
+    <div class="card"><div class="ic">🔬</div><h3>科普访谈</h3><p>研究结论保留限定条件；不把单篇研究说成定论。</p></div>
+  </div>
+</div></section>
+
+<section id="start"><div class="wrap">
+  <div class="sh"><span class="n">06</span><div><h2>开始使用</h2><p>先在自己电脑上试用，满意后再部署到服务器。</p></div></div>
+  <div class="two" style="align-items:start">
+    <div><h3>本地试用（不调用模型，不花钱）</h3>
+<pre>git clone https://github.com/rene-wang1024/podcast-assistant.git
+cd podcast-assistant
+pip install -r requirements.txt
+PIPELINE_PROVIDER_OVERRIDE=mock \
+  uvicorn app.main:app --port 8000</pre></div>
+    <div><h3>部署到香港服务器</h3>
+<pre>curl -fsSL https://get.docker.com | sh
+git clone https://github.com/rene-wang1024/podcast-assistant.git
+cd podcast-assistant && cp .env.example .env
+nano .env        # 填 SECRET_KEY 和 API Key
+docker compose up -d --build</pre>
+      <p><a href="https://github.com/rene-wang1024/podcast-assistant/blob/main/docs/deploy.md">完整部署指南 →</a></p></div>
+  </div>
+  <h3 style="margin-top:36px">路线图</h3>
+  <div class="road">
+    <div class="card done"><b>V1 · 已完成</b><h3>跑通协作</h3><p>账号和角色、单期流转、网盘链接、音频上传、企业微信通知、AI 生成 Show notes 和分发文案。</p></div>
+    <div class="card"><b>V2 · 下一步</b><h3>AI 粗剪</h3><p>服务器端转写、AI 剪点方案、网页审核剪点、本地小工具一键生成剪映草稿。</p></div>
+    <div class="card"><b>V3</b><h3>精剪、封面、复盘</h3><p>AI 精剪建议、AI 封面、定稿复盘和规则库。</p></div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">播客协作工作台 · MIT License · 最初为一档法律对谈播客打造，现适用于所有知识类播客</div></footer>
+</body>
+</html>
