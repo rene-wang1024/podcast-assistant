@@ -1,4 +1,4 @@
-"""播客协作工作台（V1）。
+"""播客协作工作台。
 
 启动：uvicorn app.main:app --host 0.0.0.0 --port 8000
 """
@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import secrets
+import shutil
 import threading
 import uuid
 from contextlib import asynccontextmanager
@@ -15,22 +16,25 @@ from copy import deepcopy
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
+from starlette.requests import ClientDisconnect
 from starlette.middleware.sessions import SessionMiddleware
 
 from pipeline.config import ModelRef, load_config, load_show
 from pipeline.core import generate_text
 
-from . import db
+from . import db, media
+from .storage import PART_SIZE, StorageError, get_storage
 from .auth import ROLES, hash_password, validate_new_password, verify_password
 from .flow import STAGE_BY_KEY, STAGES, STATUS_LABEL, next_stage
 from .notify import send_wecom
 
 BASE = Path(__file__).resolve().parent
-MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))
+MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "500"))      # 普通表单上传（文稿、封面）
+MAX_LARGE_GB = int(os.environ.get("MAX_LARGE_UPLOAD_GB", "100"))  # 分片上传（原片、视频）
 SECRET_KEY = os.environ.get("SECRET_KEY") or ""
 if not SECRET_KEY:
     logging.getLogger("uvicorn.error").warning("未设置 SECRET_KEY：每次重启后所有人都要重新登录。请在 .env 里设置。")
@@ -39,7 +43,15 @@ if not SECRET_KEY:
 @asynccontextmanager
 async def lifespan(_app):
     db.init()
+    stop = threading.Event()
+    if os.environ.get("WORKER", "1") == "1":
+        media.start_worker(store(), stop)
     yield
+    stop.set()
+
+
+def store():
+    return get_storage(db.UPLOAD_DIR)
 
 
 app = FastAPI(title="播客协作工作台", docs_url=None, redoc_url=None, lifespan=lifespan)
@@ -48,6 +60,8 @@ app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, same_site="lax", ma
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "templates")
 templates.env.globals.update(ROLES=ROLES, STATUS_LABEL=STATUS_LABEL, STAGES=STAGES)
+templates.env.globals["LEGACY_LABEL"] = {"netdisk_url": "网盘链接", "netdisk_code": "提取码", "audio": "压缩音频"}
+templates.env.filters["fromjson"] = lambda v: json.loads(v) if v else {}
 
 
 # ---------- 通用 ----------
@@ -286,8 +300,19 @@ def episode_detail(request: Request, eid: int):
         rows = {r["key"]: r for r in conn.execute("SELECT * FROM stages WHERE episode_id=?", (eid,))}
         users = {u["id"]: u for u in conn.execute("SELECT * FROM users")}
         files: dict = {}
+        derived: dict = {}
         for f in conn.execute("SELECT * FROM files WHERE episode_id=? ORDER BY id", (eid,)):
-            files.setdefault((f["stage_key"], f["field"]), []).append(f)
+            if f["kind"] == "derived":
+                derived.setdefault(f["source_file_id"], []).append(f)
+            else:
+                files.setdefault((f["stage_key"], f["field"]), []).append(f)
+        jobs: dict = {}
+        for j in conn.execute("SELECT j.*, f.source_file_id AS src2 FROM jobs j LEFT JOIN files f ON f.id=j.file_id "
+                              "WHERE j.episode_id=? ORDER BY j.id", (eid,)):
+            root = j["src2"] or j["file_id"]
+            jobs.setdefault(root, []).append(j)
+        pending = conn.execute("SELECT u.*, (SELECT COUNT(*) FROM upload_parts p WHERE p.upload_id=u.id) AS got "
+                               "FROM uploads u WHERE episode_id=? AND status='uploading' ORDER BY created_at", (eid,)).fetchall()
         events = conn.execute("SELECT ev.*, u.display_name FROM events ev LEFT JOIN users u ON u.id=ev.user_id "
                               "WHERE episode_id=? ORDER BY ev.id DESC LIMIT 50", (eid,)).fetchall()
         cfg = pipeline_config(conn)
@@ -303,7 +328,9 @@ def episode_detail(request: Request, eid: int):
                 "models": (wf.executor.label(), wf.reviewer.label()) if wf else None,
             })
         return render(request, "episode.html", user, ep=ep, stages=stages, files=files, events=events,
-                      by_role=users_by_role(conn), max_mb=MAX_UPLOAD_MB)
+                      by_role=users_by_role(conn), max_mb=MAX_UPLOAD_MB, max_gb=MAX_LARGE_GB,
+                      derived=derived, jobs=jobs, pending=pending, JOB_LABEL=media.JOB_LABEL, DERIVED=media.DERIVED, JOB_STATUS=media.JOB_STATUS,
+                      part_mb=PART_SIZE // 1048576)
 
 
 async def _save_stage(request: Request, conn, user, ep, key: str, form) -> dict:
@@ -311,12 +338,14 @@ async def _save_stage(request: Request, conn, user, ep, key: str, form) -> dict:
     row = stage_row(conn, ep["id"], key)
     data = json.loads(row["data"] or "{}")
     for f in st.fields:
+        if f.type == "file" and f.large:
+            continue  # 大文件走 /api/uploads 分片上传
         if f.type == "file":
             for up in form.getlist(f.name):
                 if not getattr(up, "filename", ""):
                     continue
-                stored = f"{uuid.uuid4().hex}{Path(up.filename).suffix.lower()[:10]}"
-                dest = db.UPLOAD_DIR / stored
+                stored = f"episodes/{ep['id']}/{key}/{uuid.uuid4().hex}{Path(up.filename).suffix.lower()[:10]}"
+                dest = store().save_path(stored)
                 size = 0
                 with dest.open("wb") as out:
                     while chunk := await up.read(1024 * 1024):
@@ -343,7 +372,7 @@ def _missing(conn, ep, key: str, data: dict) -> list[str]:
         if not f.required:
             continue
         if f.type == "file":
-            if not conn.execute("SELECT 1 FROM files WHERE episode_id=? AND stage_key=? AND field=?", (ep["id"], key, f.name)).fetchone():
+            if not conn.execute("SELECT 1 FROM files WHERE episode_id=? AND stage_key=? AND field=? AND kind='upload'", (ep["id"], key, f.name)).fetchone():
                 missing.append(f.label)
         elif not data.get(f.name):
             missing.append(f.label)
@@ -443,9 +472,209 @@ def download(request: Request, fid: int):
     with db.connect() as conn:
         current_user(request, conn)
         f = conn.execute("SELECT * FROM files WHERE id=?", (fid,)).fetchone()
-    if not f:
+    if not f or not store().exists(f["stored_name"]):
         raise Redirect("/")
-    return FileResponse(db.UPLOAD_DIR / f["stored_name"], filename=f["filename"])
+    return FileResponse(store().path(f["stored_name"]), filename=f["filename"])
+
+
+# ---------- 大文件分片上传 ----------
+#
+# 1. POST /api/uploads              初始化（或续传），返回分片大小和已收到的分片
+# 2. GET  /api/uploads/{id}/parts/{n}/target   第 n 片的上传地址（本地是本服务器；以后 OSS 是预签名地址）
+# 3. PUT  /api/uploads/{id}/parts/{n}          上传第 n 片
+# 4. POST /api/uploads/{id}/complete           全部分片到齐后合并、登记文件、触发后台处理
+# 5. DELETE /api/uploads/{id}                  放弃
+
+def _api_error(msg: str, code: int = 400):
+    return JSONResponse({"error": msg}, status_code=code)
+
+
+def _api_user(request: Request, conn):
+    uid = request.session.get("uid")
+    return conn.execute("SELECT * FROM users WHERE id=? AND active=1", (uid,)).fetchone() if uid else None
+
+
+def _parts_total(size: int, part_size: int) -> int:
+    return max(1, -(-size // part_size))
+
+
+def _upload_state(conn, up) -> dict:
+    got = [r["n"] for r in conn.execute("SELECT n FROM upload_parts WHERE upload_id=? ORDER BY n", (up["id"],))]
+    return {"id": up["id"], "part_size": up["part_size"], "parts_total": _parts_total(up["size"], up["part_size"]),
+            "received": got, "status": up["status"], "file_id": up["file_id"]}
+
+
+def _owned_upload(conn, user, uid: str):
+    up = conn.execute("SELECT * FROM uploads WHERE id=?", (uid,)).fetchone()
+    if not up or (up["user_id"] != user["id"] and not user["is_admin"]):
+        return None
+    return up
+
+
+@app.post("/api/uploads")
+async def upload_init(request: Request):
+    body = await request.json()
+    with db.connect() as conn:
+        user = _api_user(request, conn)
+        if not user:
+            return _api_error("请先登录", 401)
+        try:
+            eid, key, field = int(body["episode_id"]), str(body["stage_key"]), str(body["field"])
+            filename, size = str(body["filename"])[:200], int(body["size"])
+        except (KeyError, TypeError, ValueError):
+            return _api_error("参数不对")
+        st = STAGE_BY_KEY.get(key)
+        fdef = next((f for f in st.fields if f.name == field and f.type == "file" and f.large), None) if st else None
+        row = stage_row(conn, eid, key) if st else None
+        if not fdef or not row:
+            return _api_error("没有这个上传项")
+        if not can_edit(user, row):
+            return _api_error("这一步不是你负责，或者还没轮到", 403)
+        if size <= 0 or size > MAX_LARGE_GB * 1024 ** 3:
+            return _api_error(f"文件大小需在 {MAX_LARGE_GB} GB 以内")
+        if body.get("resume_id"):  # 续传：同一个人、同一个文件
+            up = conn.execute("SELECT * FROM uploads WHERE id=? AND user_id=? AND episode_id=? AND stage_key=? AND field=? "
+                              "AND filename=? AND size=? AND status IN ('uploading','done')",
+                              (str(body["resume_id"]), user["id"], eid, key, field, filename, size)).fetchone()
+            if up and up["status"] == "done":  # 上次其实已经传完（只是没收到回复）
+                return _upload_state(conn, up)
+            if up and store().partial_exists(up["stored_name"]):
+                return _upload_state(conn, up)
+            if up:  # 临时文件没了，只能重新传
+                conn.execute("UPDATE uploads SET status='aborted', updated_at=? WHERE id=?", (db.now(), up["id"]))
+                conn.execute("DELETE FROM upload_parts WHERE upload_id=?", (up["id"],))
+        # 磁盘空间：本文件 + 其他未完成上传还没写满的部分
+        pending_bytes = sum(r["size"] - r["got"] * r["part_size"] for r in conn.execute(
+            "SELECT u.size, u.part_size, (SELECT COUNT(*) FROM upload_parts p WHERE p.upload_id=u.id) AS got "
+            "FROM uploads u WHERE status='uploading'"))
+        free = shutil.disk_usage(db.UPLOAD_DIR).free
+        if size + max(0, pending_bytes) + 2 * 1024 ** 3 > free:
+            return _api_error(f"服务器磁盘空间不够（剩 {free / 1024 ** 3:.1f} GB），请联系管理员清理", 507)
+        uid = uuid.uuid4().hex
+        stored = f"episodes/{eid}/{key}/{uid}{Path(filename).suffix.lower()[:10]}"
+        try:
+            store().init_multipart(stored, size)
+        except (StorageError, OSError) as e:
+            return _api_error(f"存储出错：{e}", 500)
+        conn.execute("INSERT INTO uploads(id, episode_id, stage_key, field, filename, size, part_size, stored_name, status, user_id, created_at, updated_at) "
+                     "VALUES(?,?,?,?,?,?,?,?, 'uploading', ?,?,?)", (uid, eid, key, field, filename, size, PART_SIZE, stored, user["id"], db.now(), db.now()))
+        up = conn.execute("SELECT * FROM uploads WHERE id=?", (uid,)).fetchone()
+        return _upload_state(conn, up)
+
+
+@app.get("/api/uploads/{uid}")
+def upload_status(request: Request, uid: str):
+    with db.connect() as conn:
+        user = _api_user(request, conn)
+        up = _owned_upload(conn, user, uid) if user else None
+        return _upload_state(conn, up) if up else _api_error("找不到这个上传", 404)
+
+
+@app.get("/api/uploads/{uid}/parts/{n}/target")
+def upload_part_target(request: Request, uid: str, n: int):
+    with db.connect() as conn:
+        user = _api_user(request, conn)
+        up = _owned_upload(conn, user, uid) if user else None
+        if not up or up["status"] != "uploading" or not 0 <= n < _parts_total(up["size"], up["part_size"]):
+            return _api_error("找不到这个分片", 404)
+    return store().part_target(uid, n)
+
+
+@app.put("/api/uploads/{uid}/parts/{n}")
+async def upload_part(request: Request, uid: str, n: int):
+    def load():
+        with db.connect() as conn:
+            user = _api_user(request, conn)
+            return _owned_upload(conn, user, uid) if user else None
+    up = await run_in_threadpool(load)
+    if not up or up["status"] != "uploading":
+        return _api_error("找不到这个上传", 404)
+    total = _parts_total(up["size"], up["part_size"])
+    if not 0 <= n < total:
+        return _api_error("分片序号不对")
+    offset = n * up["part_size"]
+    expected = min(up["part_size"], up["size"] - offset)
+    try:
+        etag = await store().write_part(up["stored_name"], offset, expected, request.stream())
+    except StorageError as e:
+        return _api_error(str(e))
+    except ClientDisconnect:
+        return _api_error("连接中断", 400)
+    except OSError as e:
+        return _api_error(f"服务器写入失败（可能磁盘满了）：{e.strerror}", 507)
+
+    def record():
+        with db.connect() as conn:  # 上传已被取消的话不记
+            conn.execute("INSERT OR REPLACE INTO upload_parts(upload_id, n, etag) "
+                         "SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM uploads WHERE id=? AND status='uploading')", (uid, n, etag, uid))
+            conn.execute("UPDATE uploads SET updated_at=? WHERE id=?", (db.now(), uid))
+    await run_in_threadpool(record)
+    return JSONResponse({"n": n, "etag": etag}, headers={"ETag": f'"{etag}"'})
+
+
+@app.post("/api/uploads/{uid}/complete")
+def upload_complete(request: Request, uid: str):
+    with db.connect() as conn:
+        user = _api_user(request, conn)
+        up = _owned_upload(conn, user, uid) if user else None
+        if not up:
+            return _api_error("找不到这个上传", 404)
+        if up["status"] == "done":
+            return {"file_id": up["file_id"]}
+        if up["status"] != "uploading":
+            return _api_error("这个上传已取消")
+        if not can_edit(user, stage_row(conn, up["episode_id"], up["stage_key"])):
+            return _api_error("这一步已经完成或换了负责人，不能再上传；请联系管理员", 403)
+        state = _upload_state(conn, up)
+        if len(state["received"]) != state["parts_total"]:
+            return _api_error(f"还差 {state['parts_total'] - len(state['received'])} 个分片")
+        # 并发的 complete 只让一个成功
+        if conn.execute("UPDATE uploads SET status='done', updated_at=? WHERE id=? AND status='uploading'", (db.now(), uid)).rowcount == 0:
+            return _api_error("正在合并，请稍候", 409)
+        try:
+            store().complete(up["stored_name"])
+        except (StorageError, OSError) as e:
+            conn.rollback()
+            return _api_error(f"合并失败：{e}", 500)
+        st = STAGE_BY_KEY[up["stage_key"]]
+        fdef = next(f for f in st.fields if f.name == up["field"])
+        cur = conn.execute("INSERT INTO files(episode_id, stage_key, field, filename, stored_name, size, uploaded_by, created_at) "
+                           "VALUES(?,?,?,?,?,?,?,?)", (up["episode_id"], up["stage_key"], up["field"], up["filename"],
+                                                        up["stored_name"], up["size"], up["user_id"], db.now()))
+        fid = cur.lastrowid
+        conn.execute("UPDATE uploads SET file_id=? WHERE id=?", (fid, uid))
+        conn.execute("DELETE FROM upload_parts WHERE upload_id=?", (uid,))
+        db.log(conn, up["episode_id"], user["id"], "上传文件", f"{st.name} · {fdef.label}：{up['filename']}（{up['size'] / 1024 ** 3:.2f} GB）")
+        if fdef.process:
+            media.enqueue(conn, up["episode_id"], fdef.process, fid)
+        return {"file_id": fid}
+
+
+@app.delete("/api/uploads/{uid}")
+def upload_abort(request: Request, uid: str):
+    with db.connect() as conn:
+        user = _api_user(request, conn)
+        up = _owned_upload(conn, user, uid) if user else None
+        if not up or up["status"] != "uploading":
+            return _api_error("找不到这个上传", 404)
+        conn.execute("UPDATE uploads SET status='aborted', updated_at=? WHERE id=?", (db.now(), uid))
+        conn.execute("DELETE FROM upload_parts WHERE upload_id=?", (uid,))
+        store().abort(up["stored_name"])
+        return {"ok": True}
+
+
+@app.post("/jobs/{jid}/retry")
+def job_retry(request: Request, jid: int):
+    with db.connect() as conn:
+        user = current_user(request, conn, admin=True)
+        j = conn.execute("SELECT * FROM jobs WHERE id=?", (jid,)).fetchone()
+        if not j:
+            raise Redirect("/")
+        if j["status"] == "failed":
+            conn.execute("UPDATE jobs SET status='queued', error=NULL, started_at=NULL, finished_at=NULL WHERE id=?", (jid,))
+            db.log(conn, j["episode_id"], user["id"], "重试", media.JOB_LABEL.get(j["kind"], j["kind"]))
+            flash(request, "已重新排队")
+    raise Redirect(f"/episodes/{j['episode_id']}")
 
 
 # ---------- 成员 ----------

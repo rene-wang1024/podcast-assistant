@@ -6,3 +6,5 @@ python-multipart>=0.0.9
 itsdangerous>=2.1
 openai>=1.50
 anthropic>=0.40
+numpy>=1.26
+sherpa-onnx>=1.10   # 语音转写（SenseVoice）；只在配置了 ASR_MODEL_DIR 时用到

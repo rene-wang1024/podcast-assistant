@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT UNIQUE NOT NULL,
     display_name TEXT NOT NULL,
     password_hash TEXT NOT NULL,
-    role TEXT NOT NULL,              -- recorder / producer / editor / operator
+    role TEXT NOT NULL,              -- recorder / producer / editor / copywriter / operator
     is_admin INTEGER NOT NULL DEFAULT 0,
     mobile TEXT DEFAULT '',          -- 企业微信群里 @ 人用的手机号
     active INTEGER NOT NULL DEFAULT 1,
@@ -65,6 +65,40 @@ CREATE TABLE IF NOT EXISTS events (
     detail TEXT DEFAULT '',
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS uploads (       -- 分片上传（大文件）
+    id TEXT PRIMARY KEY,
+    episode_id INTEGER NOT NULL REFERENCES episodes(id),
+    stage_key TEXT NOT NULL,
+    field TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    part_size INTEGER NOT NULL,
+    stored_name TEXT NOT NULL,
+    status TEXT NOT NULL,            -- uploading / done / aborted
+    user_id INTEGER REFERENCES users(id),
+    file_id INTEGER REFERENCES files(id),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS upload_parts (
+    upload_id TEXT NOT NULL REFERENCES uploads(id),
+    n INTEGER NOT NULL,
+    etag TEXT NOT NULL,
+    PRIMARY KEY (upload_id, n)
+);
+CREATE TABLE IF NOT EXISTS jobs (          -- 服务器后台处理（提取音频、转写）
+    id INTEGER PRIMARY KEY,
+    episode_id INTEGER NOT NULL REFERENCES episodes(id),
+    kind TEXT NOT NULL,
+    file_id INTEGER REFERENCES files(id),
+    status TEXT NOT NULL,            -- queued / running / done / failed / skipped
+    result TEXT,
+    error TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    started_at TEXT,
+    finished_at TEXT
+);
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -82,12 +116,26 @@ def connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DATA_DIR / "app.db", timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 30000")
+    conn.execute("PRAGMA journal_mode = WAL")  # 后台任务写库时，网页还能读
     return conn
+
+
+MIGRATIONS = [  # (表, 列, 定义)：给老数据库补列
+    ("files", "kind", "TEXT NOT NULL DEFAULT 'upload'"),   # upload / derived（服务器生成）
+    ("files", "source_file_id", "INTEGER REFERENCES files(id)"),
+    ("files", "meta", "TEXT NOT NULL DEFAULT '{}'"),
+    ("jobs", "attempts", "INTEGER NOT NULL DEFAULT 0"),
+]
 
 
 def init() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        for table, col, ddl in MIGRATIONS:
+            cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+            if col not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
 
 
 def get_setting(conn, key: str, default=None):

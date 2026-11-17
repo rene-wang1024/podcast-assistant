@@ -1,5 +1,26 @@
 {% extends "base.html" %}
 {% block title %}{{ ep.code }} {{ ep.title }} · 播客工作台{% endblock %}
+{% macro file_list(stkey, fname) %}
+  {% for fl in files.get((stkey, fname), []) %}
+  <div class="file-item">
+    <a href="/files/{{ fl.id }}">📎 {{ fl.filename }}</a>
+    <span class="muted small">{{ (fl.size / 1048576) | round(1) }} MB</span>
+    {% set m = fl.meta | fromjson %}{% if m.duration %}<span class="muted small">· {{ (m.duration // 60) | int }} 分 {{ (m.duration % 60) | int }} 秒{% if m.height %} · {{ m.width }}×{{ m.height }}{% endif %}</span>{% endif %}
+    {% for j in jobs.get(fl.id, []) %}
+      <div class="small job {{ j.status }}">{{ JOB_LABEL.get(j.kind, j.kind) }}：{{ JOB_STATUS.get(j.status, j.status) }}
+        {% if j.status == 'failed' %}<span class="muted">（{{ j.error }}）</span>
+          {% if user.is_admin %}<form method="post" action="/jobs/{{ j.id }}/retry" style="display:inline"><button class="btn small">重试</button></form>{% endif %}
+        {% elif j.status == 'skipped' %}<span class="muted">（服务器没有配置转写模型）</span>{% endif %}
+      </div>
+    {% endfor %}
+    {% for d in derived.get(fl.id, []) %}
+      <div class="small derived">↳ {{ DERIVED.get(d.field, (d.field,))[0] }}：<a href="/files/{{ d.id }}">{{ d.filename }}</a> <span class="muted">{{ (d.size / 1048576) | round(1) }} MB</span>
+        {% if d.field == 'audio_preview' %}<br><audio controls preload="none" src="/files/{{ d.id }}"></audio>{% endif %}</div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+{% endmacro %}
+
 {% block content %}
 <div class="head">
   <div><div class="muted">{{ ep.code }}</div><h1>{{ ep.title }}</h1></div>
@@ -55,10 +76,20 @@
         <label>{{ f.label }}{% if f.required %}<span class="req">*</span>{% endif %}{% if f.help %}<span class="help">{{ f.help }}</span>{% endif %}</label>
         {% if f.type == 'textarea' %}<textarea name="{{ f.name }}">{{ s.data.get(f.name, '') }}</textarea>
         {% elif f.type == 'markdown' %}<textarea class="big" name="{{ f.name }}" placeholder="{{ '可以先点上面的「生成 AI 初稿」' if st.ai }}">{{ s.data.get(f.name, '') }}</textarea>
+        {% elif f.type == 'file' and f.large %}
+          {{ file_list(st.key, f.name) }}
+          {% for pu in pending if pu.stage_key == st.key and pu.field == f.name and pu.user_id == user.id %}
+            <div class="small warn">未传完：{{ pu.filename }}（已传 {{ ((pu.got * pu.part_size / pu.size * 100) if pu.size else 0) | round(0) | int }}%）。重新选择这个文件会从断点继续。</div>
+          {% endfor %}
+          <div class="uploader" data-episode="{{ ep.id }}" data-stage="{{ st.key }}" data-field="{{ f.name }}">
+            <input type="file" {% if f.accept %}accept="{{ f.accept }}"{% endif %}>
+            <div class="up-status small muted">单个文件不超过 {{ max_gb }} GB；选择后自动开始上传</div>
+            <div class="up-bar" hidden><div></div></div>
+          </div>
         {% elif f.type == 'file' %}
-          {% for fl in files.get((st.key, f.name), []) %}<div class="small"><a href="/files/{{ fl.id }}">📎 {{ fl.filename }}</a> <span class="muted">{{ (fl.size / 1048576) | round(1) }} MB</span></div>{% endfor %}
+          {{ file_list(st.key, f.name) }}
           <input type="file" name="{{ f.name }}" {% if f.accept %}accept="{{ f.accept }}"{% endif %}>
-          <div class="help" style="margin:4px 0 0">单个文件不超过 {{ max_mb }} MB；视频请放网盘</div>
+          <div class="help" style="margin:4px 0 0">单个文件不超过 {{ max_mb }} MB</div>
         {% else %}<input type="{{ 'url' if f.type == 'url' else 'text' }}" name="{{ f.name }}" value="{{ s.data.get(f.name, '') }}">{% endif %}
       {% endfor %}
       <div class="btns">
@@ -72,13 +103,26 @@
     <dl class="kv">
     {% for f in st.fields %}
       <dt>{{ f.label }}</dt>
-      <dd>{% if f.type == 'file' %}{% for fl in files.get((st.key, f.name), []) %}<a href="/files/{{ fl.id }}">📎 {{ fl.filename }}</a><br>{% else %}<span class="muted">—</span>{% endfor %}
+      <dd>{% if f.type == 'file' %}{% if files.get((st.key, f.name)) %}{{ file_list(st.key, f.name) }}{% else %}<span class="muted">—</span>{% endif %}
         {% elif f.type == 'url' and s.data.get(f.name) %}<a href="{{ s.data[f.name] }}" target="_blank" rel="noopener">{{ s.data[f.name] }}</a>
         {% elif f.type == 'markdown' and s.data.get(f.name) %}<pre class="md">{{ s.data[f.name] }}</pre>
         {% else %}<span class="pre">{{ s.data.get(f.name) or '—' }}</span>{% endif %}</dd>
     {% endfor %}
     </dl>
     {% if r.status == 'done' %}<p class="muted small">完成于 {{ r.completed_at[:16].replace('T',' ') }}</p>{% endif %}
+  {% endif %}
+
+  {# ---- 旧版本留下的字段（如 V1 的网盘链接、压缩音频），流程改了也照样显示 ---- #}
+  {% set names = st.fields | map(attribute='name') | list %}
+  {% set old_data = [] %}{% for k, v in s.data.items() if k not in names and v %}{% set _ = old_data.append((k, v)) %}{% endfor %}
+  {% set old_files = [] %}{% for fk, fl in files.items() if fk[0] == st.key and fk[1] not in names %}{% set _ = old_files.append(fk[1]) %}{% endfor %}
+  {% if old_data or old_files %}
+  <details class="small legacy" open><summary>旧版本的字段</summary>
+    <dl class="kv">
+    {% for k, v in old_data %}<dt>{{ LEGACY_LABEL.get(k, k) }}</dt><dd>{% if v.startswith('http') %}<a href="{{ v }}" target="_blank" rel="noopener">{{ v }}</a>{% else %}<span class="pre">{{ v }}</span>{% endif %}</dd>{% endfor %}
+    {% for fname in old_files %}<dt>{{ LEGACY_LABEL.get(fname, fname) }}</dt><dd>{{ file_list(st.key, fname) }}</dd>{% endfor %}
+    </dl>
+  </details>
   {% endif %}
 
   {% if user.is_admin %}
@@ -108,4 +152,5 @@
     <li><span class="muted">{{ e.created_at[5:16].replace('T',' ') }}</span> · {{ e.display_name or '系统' }} · <strong>{{ e.action }}</strong> {{ e.detail }}</li>
   {% else %}<li class="muted">暂无</li>{% endfor %}</ul>
 </section>
+<script src="/static/upload.js"></script>
 {% endblock %}

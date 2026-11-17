@@ -27,7 +27,7 @@ Podcast Assistant turns each episode into a **pipeline**. Every step has a clear
 | | | |
 |---|---|---|
 | 🔁 **Automatic handoffs**<br>Click "Done" and the next step's owner is notified right away | 🤖 **AI drafts, humans review**<br>AI writes the first draft of each step; the owner edits and approves | 🔍 **Independent review**<br>A model from a different vendor checks each AI draft against the step's delivery standard |
-| 🧩 **A different model per step**<br>Codex for rough cuts, GPT for cover art, Claude for writing; change any of them on the settings page | 📦 **Big files stay put**<br>Raw video stays on Baidu Netdisk; the workbench stores only links and a compressed audio file | 💬 **WeCom notifications**<br>A group bot @-mentions the exact person, and sending a step back includes the reason |
+| 🧩 **A different model per step**<br>Codex for rough cuts, GPT for cover art, Claude for writing; change any of them on the settings page | 📦 **Files move inside the workbench**<br>Raw video uploads in chunks and resumes after a dropped connection; the server extracts the audio and transcribes it | 💬 **WeCom notifications**<br>A group bot @-mentions the exact person, and sending a step back includes the reason |
 
 ## How an episode flows
 
@@ -44,9 +44,9 @@ flowchart LR
 
 | Step | Owner | Owner delivers | AI drafts | Default models |
 |---|---|---|---|---|
-| Recording upload | Recording team | Netdisk link, compressed audio, script, episode requirements | — | — |
-| Rough cut | Producer | Reviewed cut list, rough-cut link | Transcript + cut list (V2) | SenseVoice + OpenAI Codex |
-| Fine cut | Editor | Final-cut link, final transcript | Fine-cut suggestions (V3) | Claude |
+| Recording upload | Recording team | Raw video, script, episode requirements | Audio extraction ✅ and transcript ✅ (server, no LLM) | FFmpeg, SenseVoice |
+| Rough cut | Producer | Reviewed cut list, 1080p rough-cut video | Cut list (V2) | OpenAI Codex |
+| Fine cut | Editor | Final video, final transcript | Fine-cut suggestions (V3) | Claude |
 | Show notes + cover | Producer | Approved show notes and cover | Show notes ✅, cover (V3) | Claude, GPT Image |
 | Copy review | Copy editor | Per-platform copy, checked for facts, wording and risk | Per-platform copy ✅ | GPT |
 | Edit & publish | Ops | Posts edited and published on each platform, links pasted back | — (audio platforms sync via RSS) | — |
@@ -86,12 +86,19 @@ PIPELINE_PROVIDER_OVERRIDE=mock uvicorn app.main:app --port 8000
 # Open http://127.0.0.1:8000, create the admin account, add members, create an episode
 ```
 
-**Deploy for real:** follow the [deployment guide](docs/deploy.md) (in Chinese) to run it with Docker on a Hong Kong or Singapore server. Teammates in mainland China and overseas can both reach it, and no ICP filing is needed.
+**Deploy for real:** follow the [deployment guide](docs/deploy.md) (in Chinese) to run it with Docker on a Singapore server. Teammates in mainland China and overseas can both reach it, no ICP filing is needed, and the server can call the OpenAI and Anthropic APIs.
 
 ## Roadmap
 
 - [x] **V1 – Collaboration:** accounts and roles, per-episode handoffs, netdisk links and audio upload, WeCom notifications, sending a step back (admin), AI-drafted show notes and distribution copy with independent review
-- [ ] **V2 – AI rough cut:** server-side transcription (SenseVoice, character-level timestamps), AI cut lists, reviewing cuts in the browser, a local helper that writes a CapCut (剪映) draft in one click
+- [ ] **V2 – Files and AI rough cut**
+  - [x] Large-file transfer inside the workbench: chunked upload, resume after a dropped connection, range downloads
+  - [x] Server extracts audio (lossless FLAC, 16 kHz WAV, preview MP3) and transcribes it (SenseVoice, character-level timestamps)
+  - [ ] Server renders the 1080p rough-cut video from the cut list (FFmpeg)
+  - [ ] The producer's own Claude claims rough-cut tasks, runs the rough-cut skill and returns the cut list and preview
+  - [ ] Reviewing cuts and listening to the preview in the browser
+  - [ ] Object storage (Alibaba Cloud OSS) with browser-direct upload
+- [ ] **V2.1:** after publishing, sync the raw video to Baidu Netdisk as an archive
 - [ ] **V3:** AI fine-cut suggestions, AI cover art, post-release retrospectives and the rule library
 
 ## Project layout

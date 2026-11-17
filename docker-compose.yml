@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     env_file: .env
     volumes:
-      - ./data:/data          # 数据库和上传的音频都在这里，记得定期备份
+      - ./data:/data          # 数据库和所有上传的文件（含原片）都在这里，记得定期备份
     expose:
       - "8000"
 

@@ -1,12 +1,13 @@
-# 部署到香港 / 新加坡服务器
+# 部署到新加坡服务器
 
-团队成员分别在国内和海外时，香港或新加坡的服务器两边都能打开，而且不需要 ICP 备案。下面以阿里云「轻量应用服务器 · 中国香港」为例，腾讯云 Lighthouse 香港、新加坡也是一样的步骤。
+团队成员分别在国内和海外时，新加坡的服务器两边都能打开，不需要 ICP 备案，也能直接调用 OpenAI、Anthropic 的 API（中国内地和香港不在这两家的服务地区内，所以不选香港）。下面以阿里云「轻量应用服务器 · 新加坡」为例，腾讯云 Lighthouse 新加坡也是一样的步骤。
 
 ## 1. 买服务器（约 10 分钟）
-1. 打开阿里云轻量应用服务器的购买页，地域选 **中国香港**（或新加坡）。
-2. 镜像选 **Ubuntu 22.04**，配置选 **2 核 2 GB** 就够用（V2 跑语音转写时建议 4 GB）。价格以官网为准，一般每月几十元。
-3. 买好后进入控制台 → 防火墙，放行 **80** 和 **443** 端口（22 端口默认是开的）。
-4. 记下服务器的 **公网 IP**，并在控制台设置或重置 root 密码。
+1. 打开阿里云轻量应用服务器的购买页，地域选 **新加坡**。
+2. 镜像选 **Ubuntu 22.04**，配置选 **2 核 4 GB** 以上（服务器要做语音转写，2 GB 内存不够）。价格以官网为准。
+3. **硬盘要够放原片**：原片、粗剪视频和成品都存在服务器上。一期单机位 1080p 原片大约 20–60 GB，建议系统盘之外再挂一块 200 GB 以上的数据盘，挂到 `podcast-assistant/data`。以后接入阿里云 OSS 后，大文件改存 OSS，就不需要大硬盘了。
+4. 买好后进入控制台 → 防火墙，放行 **80** 和 **443** 端口（22 端口默认是开的）。
+5. 记下服务器的 **公网 IP**，并在控制台设置或重置 root 密码。
 
 ## 2. 安装并启动（约 10 分钟）
 在电脑的终端里登录服务器：
@@ -30,9 +31,11 @@ cp .env.example .env
 sed -i "s/^SECRET_KEY=.*/SECRET_KEY=$(openssl rand -hex 32)/" .env
 nano .env      # 填 OPENAI_API_KEY、ANTHROPIC_API_KEY；Ctrl+O 保存，Ctrl+X 退出
 
-# 启动
+# 启动（第一次会下载约 230 MB 的语音转写模型）
 docker compose up -d --build
 ```
+
+不需要服务器做语音转写（比如内存只有 2 GB）时，改用 `docker compose build --build-arg ASR=0 && docker compose up -d`。音频照样会自动提取，只是不出转写稿。
 
 在浏览器打开 `http://你的公网IP`，创建管理员账号。
 
@@ -66,4 +69,5 @@ git clone https://github.com/rene-wang1024/podcast-assistant.git && cd podcast-a
 pip install -r requirements.txt
 PIPELINE_PROVIDER_OVERRIDE=mock uvicorn app.main:app --port 8000
 ```
+需要先装好 FFmpeg（Mac：`brew install ffmpeg`）。想在本机试语音转写，下载 [SenseVoice 模型](https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2)，解压后启动时加 `ASR_MODEL_DIR=解压后的目录`。
 然后打开 http://127.0.0.1:8000。加了 `mock` 时 AI 步骤不会调用真实模型，也不会产生费用。

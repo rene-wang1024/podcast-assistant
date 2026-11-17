@@ -105,3 +105,17 @@ td input, td select { padding: 5px 8px; }
   .nav a { margin-right: 10px; } .kv { grid-template-columns: 1fr; } .kv dt { margin-top: 8px; }
   .topbar .inner { gap: 12px; overflow-x: auto; }
 }
+
+/* 大文件上传与后台处理 */
+.uploader { border: 1.5px dashed var(--line); border-radius: 12px; padding: 12px 14px; margin-top: 6px; background: #fcfbf8; }
+.uploader.drag { border-color: var(--brand); background: var(--brand-soft); }
+.up-bar { height: 8px; background: #eee9df; border-radius: 99px; overflow: hidden; margin-top: 8px; }
+.up-bar > div { height: 100%; width: 0; background: var(--brand); transition: width .3s; }
+.up-status.err { color: var(--err); }
+.file-item { margin: 6px 0 10px; }
+.file-item .derived { margin: 4px 0 0 14px; }
+.file-item audio { height: 32px; margin-top: 4px; max-width: 100%; }
+.job { margin: 4px 0 0 14px; }
+.job.failed { color: var(--err); }
+.job.queued, .job.running { color: var(--muted); }
+.warn { color: #9a6700; margin: 4px 0; }
